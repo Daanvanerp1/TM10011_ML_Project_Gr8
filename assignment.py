@@ -53,4 +53,22 @@ data.iloc[:, 1:5].hist(figsize=(10, 8), bins=30, color='skyblue', edgecolor='bla
 plt.suptitle('Histogrammen van geselecteerde features', y=1.02)
 plt.tight_layout()
 plt.show()
+
+# %% Data Preprocessing
+# Label encoding (Switch Gist and non-Gist to 1 and 0 respectively)
+from sklearn.preprocessing import LabelEncoder
+label_encoder = LabelEncoder()
+data['label'] = label_encoder.fit_transform(data['label'])
+
+# Split data into training and testing sets, stratify and use 20% of the data for testing
+from sklearn.model_selection import train_test_split
+X = data.drop('label', axis=1)
+y = data['label']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+# show the shape and distribution of the training and testing sets
+print(f'Training set shape: {X_train.shape}')
+print(f'Testing set shape: {X_test.shape}')
+print(f'Training set label distribution: {y_train.value_counts()}')
+print(f'Testing set label distribution: {y_test.value_counts()}')
+
 # %%
