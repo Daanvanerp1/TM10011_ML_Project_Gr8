@@ -3,9 +3,14 @@
 #%%
 import matplotlib.pyplot as plt
 import seaborn as sns
+from worcgist.load_data import load_data
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import RobustScaler
+from scipy.stats.mstats import winsorize
+from sklearn.feature_selection import VarianceThreshold
 
 #%% Data loading functions. Uncomment the one you want to use
-from worcgist.load_data import load_data
 
 data = load_data()
 print(f'The number of samples: {len(data.index)}')
@@ -55,14 +60,12 @@ plt.tight_layout()
 plt.show()
 
 # %% Data Preprocessing
-# Label encoding (Switch Gist and non-Gist to 1 and 0 respectively)
-from sklearn.preprocessing import LabelEncoder
+# Label encoding (Switch Gist and non-Gist to 1 and 0 respectively) and delete first column (ID)
 label_encoder = LabelEncoder()
 data['label'] = label_encoder.fit_transform(data['label'])
 
 # Split data into training and testing sets, stratify and use 20% of the data for testing
-from sklearn.model_selection import train_test_split
-X = data.drop('label', axis=1)
+X = data.drop(['label'], axis=1)
 y = data['label']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 # show the shape and distribution of the training and testing sets
@@ -70,5 +73,25 @@ print(f'Training set shape: {X_train.shape}')
 print(f'Testing set shape: {X_test.shape}')
 print(f'Training set label distribution: {y_train.value_counts()}')
 print(f'Testing set label distribution: {y_test.value_counts()}')
+
+# %%
+# Data scaling (Standardization)
+scaler = RobustScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Winsorization
+X_train_winsorized = winsorize(X_train_scaled, limits=[0.1, 0.1], axis=0)
+X_test_winsorized = winsorize(X_test_scaled, limits=[0.1, 0.1], axis=0)
+
+# variance thresholding
+selector = VarianceThreshold(threshold=0.1)
+X_train_selected = selector.fit_transform(X_train_winsorized)
+X_test_selected = selector.transform(X_test_winsorized)
+
+
+
+
+
 
 # %%
