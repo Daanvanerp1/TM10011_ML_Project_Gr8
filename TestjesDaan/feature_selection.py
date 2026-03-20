@@ -21,15 +21,19 @@ y = data['label']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 # --- STAP 1: Schalen (RobustScaler) ---
-scaler = RobustScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+# scaler = RobustScaler()
+# X_train_scaled = scaler.fit_transform(X_train)
+# X_test_scaled = scaler.transform(X_test)
 
 # --- STAP 2: Variantie Filter ---
 # Tip: Speel met deze drempel. Bij RobustScaler is de variantie vaak klein.
 selector = VarianceThreshold(threshold=0.01)
-X_train_selected = selector.fit_transform(X_train_scaled)
-X_test_selected = selector.transform(X_test_scaled)
+X_train_selected = selector.fit_transform(X_train)
+X_test_selected = selector.transform(X_test)
+
+scaler = RobustScaler()
+X_train_scaled = scaler.fit_transform(X_train_selected)
+X_test_scaled = scaler.transform(X_test_selected)
 
 # --- STAP 3: Winsorization (Veilig tegen Data Leakage!) ---
 # Bereken grenzen ALLEEN op trainingsset
