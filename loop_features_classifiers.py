@@ -187,7 +187,7 @@ print("\n RESULTS  (sorted on best mean CV Accuracy):")
 print(results_df.sort_values(by='Mean CV Accuracy', ascending=False).to_string(index=False))
 
 
-#----------Hyyperparameter tuning of best model (XGBoost with Mann-Whitney U)-----------
+#----------Hyperparameter tuning of best model (XGBoost with Mann-Whitney U)-----------
 
 # 1. Create a custom Scikit-Learn Transformer for the Mann-Whitney U test
 class MWUSelector(BaseEstimator, TransformerMixin):
