@@ -1,0 +1,158 @@
+# ---------------------------------------------------------
+# 5. Nested CV Execution & Feature Extraction per Fold
+# ---------------------------------------------------------
+print("Starting Nested Cross-Validation...")
+
+# Define the outer CV
+outer_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+# Lists to store metrics for plotting and the final table
+fold_results = []
+tprs = []
+aucs = []
+all_y_test = []
+all_y_pred = []
+mean_fpr = np.linspace(0, 1, 100)
+
+# List to store the top 10 features for each fold
+fold_top_features_list = []
+
+# Setup the plot
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Execute the manual outer loop
+for fold, (train_idx, test_idx) in enumerate(tqdm(outer_cv.split(X, y), total=outer_cv.get_n_splits(), desc="Outer CV Folds")):
+    
+    # Split the data for this specific fold
+    X_train_outer, X_test_outer = X.iloc[train_idx], X.iloc[test_idx]
+    y_train_outer, y_test_outer = y.iloc[train_idx], y.iloc[test_idx]
+    
+    # Run the inner RandomizedSearchCV to find the best model
+    random_search.fit(X_train_outer, y_train_outer)
+    
+    # Extract the best model
+    best_model = random_search.best_estimator_
+    best_params = random_search.best_params_
+    
+    # Evaluate the best model on the hidden outer test fold
+    y_pred = best_model.predict(X_test_outer)
+    y_prob = best_model.predict_proba(X_test_outer)[:, 1]
+    
+    # Calculate fold metrics
+    fold_acc = accuracy_score(y_test_outer, y_pred)
+    fpr, tpr, thresholds = roc_curve(y_test_outer, y_prob)
+    fold_auc = auc(fpr, tpr)
+    
+    # Save true and predicted labels for the cumulative confusion matrix
+    all_y_test.extend(y_test_outer)
+    all_y_pred.extend(y_pred)
+    
+    # Save the ROC curve data for the mean plot later
+    interp_tpr = np.interp(mean_fpr, fpr, tpr)
+    interp_tpr[0] = 0.0
+    tprs.append(interp_tpr)
+    aucs.append(fold_auc)
+    
+    # Plot the ROC curve for this specific fold
+    ax.plot(fpr, tpr, alpha=0.3, label=f'ROC fold {fold+1} (AUC = {fold_auc:.2f})')
+    
+    # Clean up the best_params dictionary for the table
+    classifier = best_model.named_steps['classifier']
+    classifier_name = str(classifier.__class__.__name__)
+    feature_selector_name = str(best_model.named_steps['feature_selection'].__class__.__name__)
+    if feature_selector_name == "str": 
+        feature_selector_name = "None"
+        
+    # Store the results for the summary table
+    fold_results.append({
+        'Fold': fold + 1,
+        'Classifier': classifier_name,
+        'Feature Selector': feature_selector_name,
+        'Outer Accuracy': round(fold_acc, 4),
+        'Outer AUC': round(fold_auc, 4),
+        'Best Params (Raw)': best_params
+    })
+
+    # ---------------------------------------------------------
+    # FEATURE EXTRACTION FOR THIS SPECIFIC FOLD
+    # ---------------------------------------------------------
+    
+    # 1. Get feature names after VarianceThreshold
+    vt = best_model.named_steps['variance_thresh']
+    vt_support = vt.get_support()
+    features_after_vt = np.array(X_train_outer.columns)[vt_support]
+
+    # 2. Map current pipeline column names to real names
+    winsorizer = best_model.named_steps['winsorizer']
+    winsor_cols = winsorizer.lower_bounds_.index.tolist()
+    real_names_dict = {col: features_after_vt[i] for i, col in enumerate(winsor_cols)}
+
+    # 3. Filter out features dropped by CorrelationFilter
+    corr_filter = best_model.named_steps['corr_filter']
+    remaining_cols = [c for c in winsor_cols if c not in corr_filter.to_drop]
+    features_after_corr = [real_names_dict[c] for c in remaining_cols]
+
+    # 4. Filter out features dropped by the specific Feature Selector
+    fs = best_model.named_steps['feature_selection']
+    if fs == 'passthrough':
+        final_feature_names = features_after_corr
+    elif hasattr(fs, 'get_support'):
+        fs_support = fs.get_support()
+        final_feature_names = np.array(features_after_corr)[fs_support].tolist()
+    elif hasattr(fs, 'selected_indices_'):
+        final_feature_names = [real_names_dict[c] for c in fs.selected_indices_]
+    else:
+        final_feature_names = features_after_corr
+        
+    # 5. Extract mathematical importances
+    if hasattr(classifier, 'feature_importances_'):
+        importances = classifier.feature_importances_
+    elif hasattr(classifier, 'coef_'):
+        importances = np.abs(classifier.coef_[0])
+    else:
+        importances = np.zeros(len(final_feature_names))
+
+    # 6. Sort and extract top 10 for this fold
+    imp_df = pd.DataFrame({'Feature': final_feature_names, 'Importance': importances})
+    imp_df = imp_df.sort_values(by='Importance', ascending=False).head(10)
+    
+    # Save the top 10 names to our list
+    fold_top_features_list.append(imp_df['Feature'].tolist())
+
+# --- FINALIZE ROC PLOT ---
+mean_tpr = np.mean(tprs, axis=0)
+mean_tpr[-1] = 1.0
+mean_auc = auc(mean_fpr, mean_tpr)
+std_auc = np.std(aucs)
+
+ax.plot(mean_fpr, mean_tpr, color='b', label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc), lw=2, alpha=0.8)
+ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', label='Chance', alpha=0.8)
+
+ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05], title="Receiver Operating Characteristic (Nested CV)")
+ax.set_xlabel('False Positive Rate')
+ax.set_ylabel('True Positive Rate')
+ax.legend(loc="lower right")
+plt.show()
+
+# ---------------------------------------------------------
+# 6. Summary Tables & Feature Stability Output
+# ---------------------------------------------------------
+print("\n--- Summary of Best Models per Outer Fold ---")
+results_df = pd.DataFrame(fold_results)
+display(results_df.drop(columns=['Best Params (Raw)']))
+
+# Calculate and print the unbiased overall metrics
+print("\n--- Unbiased Overall Performance ---")
+print(f"Mean Nested Accuracy: {results_df['Outer Accuracy'].mean():.4f} (+/- {results_df['Outer Accuracy'].std():.4f})")
+print(f"Mean Nested AUC:      {results_df['Outer AUC'].mean():.4f} (+/- {results_df['Outer AUC'].std():.4f})")
+
+# --- DISPLAY TOP 10 FEATURES SIDE-BY-SIDE ---
+print("\n--- Top 10 Features Per Fold (Stability Analysis) ---")
+
+# Convert the list of lists into a DataFrame where each column is a fold
+top_features_df = pd.DataFrame(fold_top_features_list).T
+top_features_df.columns = [f"Fold {i+1}" for i in range(5)]
+top_features_df.index = [f"Rank {i+1}" for i in range(10)]
+
+# Display the clean side-by-side comparison table
+display(top_features_df)
