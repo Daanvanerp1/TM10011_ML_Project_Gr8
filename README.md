@@ -1,10 +1,10 @@
 # TM10011 Machine Learning Project: GIST Radiomics Classification - Group 8
 
 ## Project Overview
-This repository contains the code for the final research project of the TM10011 Machine Learning course. The objective is to develop and rigorously evaluate a machine learning pipeline to classify gastrointestinal stromal tumors (GIST) based on radiomic features extracted from medical images.
+This repository contains the code for the final research project of the TM10011 Machine Learning course. The objective is to develop and evaluate a machine learning pipeline to classify gastrointestinal stromal tumors (GIST) based on radiomic features extracted from medical images.
 
 ## Dataset
-The project utilizes the `GIST_radiomicFeatures.csv` dataset, which contains various 2.5D radiomic features and a binary target label.
+The project utilizes the `GIST_radiomicFeatures.csv` dataset, which contains various radiomic features and a binary target label (GIST and Non-GIST).
 
 ## Methodology
 To ensure an unbiased evaluation of the model performance, a Nested Cross-Validation approach is implemented. The pipeline systematically evaluates multiple feature selection methods and classification algorithms.
